@@ -1,5 +1,13 @@
 import { useFeatureSupport } from "@canva/app-hooks";
-import { Button, Checkbox, Rows, Text, Title } from "@canva/app-ui-kit";
+import {
+  Button,
+  Checkbox,
+  FormField,
+  Rows,
+  Text,
+  TextInput,
+  Title,
+} from "@canva/app-ui-kit";
 import {
   addElementAtCursor,
   addElementAtPoint,
@@ -10,13 +18,50 @@ import { useMemo, useState } from "react";
 import { defineMessages, useIntl } from "react-intl";
 import * as styles from "styles/components.css";
 
-import { checkProblems, generateProblems, worksheetLines } from "./math";
+import {
+  checkProblems,
+  generateProblems,
+  seededRandom,
+  worksheetLines,
+} from "./math";
 import type { Operation } from "./math";
 
 import { worksheetPage } from "./worksheet_page";
 
-const operations: Operation[] = ["add", "subtract", "multiply", "divide"];
+const operations: Operation[] = [
+  "add",
+  "subtract",
+  "multiply",
+  "divide",
+  "fractionAdd",
+  "fractionSubtract",
+  "fractionCompare",
+];
 const messages = defineMessages({
+  fractionAdd: {
+    description: "Math operation",
+    defaultMessage: "Add like-denominator fractions",
+  },
+  fractionSubtract: {
+    description: "Math operation",
+    defaultMessage: "Subtract like-denominator fractions",
+  },
+  fractionCompare: {
+    description: "Math operation",
+    defaultMessage: "Compare like-denominator fractions",
+  },
+  seed: {
+    description: "Repeatable worksheet seed label",
+    defaultMessage: "Seed (optional)",
+  },
+  customTitle: {
+    description: "Worksheet title field label",
+    defaultMessage: "Worksheet title",
+  },
+  customDirections: {
+    description: "Worksheet directions field label",
+    defaultMessage: "Student directions",
+  },
   add: {
     description: "Addition option and symbol",
     defaultMessage: "Addition +",
@@ -153,6 +198,9 @@ export const App = () => {
     supports(fn),
   );
   const [operation, setOperation] = useState<Operation>("add");
+  const [seed, setSeed] = useState("");
+  const [customTitle, setCustomTitle] = useState("");
+  const [directions, setDirections] = useState("");
   const [columns, setColumns] = useState(2);
   const canAddPage = supports(addPage) && supports(getDesignMetadata);
   const [count, setCount] = useState(10);
@@ -168,7 +216,12 @@ export const App = () => {
     [problems, showAnswers],
   );
   const generate = () => {
-    const next = generateProblems(operation, count, max);
+    const next = generateProblems(
+      operation,
+      count,
+      max,
+      seed.trim() ? seededRandom(seed.trim()) : Math.random,
+    );
     if (!checkProblems(next)) {
       setMessage(formatMessage(messages.generationError));
       return;
@@ -216,14 +269,14 @@ export const App = () => {
         setMessage(formatMessage(messages.pageError));
         return;
       }
-      const title = formatMessage(
-        answers ? messages.answerTitle : messages.practice,
-      );
+      const title = answers
+        ? formatMessage(messages.answerTitle)
+        : customTitle.trim() || formatMessage(messages.practice);
       const instructions = answers
         ? []
         : [
             formatMessage(messages.nameDate),
-            formatMessage(messages.directions),
+            directions.trim() || formatMessage(messages.directions),
           ];
       await addPage({
         title,
@@ -286,6 +339,25 @@ export const App = () => {
             </option>
           ))}
         </select>
+        <FormField
+          label={formatMessage(messages.seed)}
+          value={seed}
+          control={(props) => <TextInput {...props} onChange={setSeed} />}
+        />
+        <FormField
+          label={formatMessage(messages.customTitle)}
+          value={customTitle}
+          control={(props) => (
+            <TextInput {...props} onChange={setCustomTitle} maxLength={45} />
+          )}
+        />
+        <FormField
+          label={formatMessage(messages.customDirections)}
+          value={directions}
+          control={(props) => (
+            <TextInput {...props} onChange={setDirections} maxLength={70} />
+          )}
+        />
         <Button variant="secondary" onClick={generate} stretch>
           {formatMessage(messages.generate)}
         </Button>
