@@ -5,7 +5,8 @@ export type Operation =
   | "divide"
   | "fractionAdd"
   | "fractionSubtract"
-  | "fractionCompare";
+  | "fractionCompare"
+  | "fractionIdentify";
 export type Problem = {
   id: number;
   left: number;
@@ -23,6 +24,7 @@ const symbols: Record<Operation, string> = {
   fractionAdd: "+",
   fractionSubtract: "−",
   fractionCompare: "?",
+  fractionIdentify: "=",
 };
 function integer(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -83,6 +85,9 @@ export function generateProblems(
       case "fractionCompare":
         answer = Math.sign(a - b);
         break;
+      case "fractionIdentify":
+        answer = a;
+        break;
       default:
         throw new Error("Unsupported operation");
     }
@@ -94,9 +99,11 @@ export function generateProblems(
       answer,
       denominator,
       display: denominator
-        ? operation === "fractionCompare"
-          ? `${a}/${denominator} _____ ${b}/${denominator}`
-          : `${a}/${denominator} ${symbols[operation]} ${b}/${denominator} = _____`
+        ? operation === "fractionIdentify"
+          ? `${"■".repeat(a)}${"□".repeat(denominator - a)} = _____`
+          : operation === "fractionCompare"
+            ? `${a}/${denominator} _____ ${b}/${denominator}`
+            : `${a}/${denominator} ${symbols[operation]} ${b}/${denominator} = _____`
         : `${a} ${symbols[operation]} ${b} = _____`,
     });
   }
@@ -104,17 +111,22 @@ export function generateProblems(
 }
 export function checkProblems(problems: Problem[]): boolean {
   return problems.every((p) =>
-    p.operation === "fractionCompare"
-      ? Math.sign(p.left - p.right) === p.answer
-      : p.operation === "add" || p.operation === "fractionAdd"
-        ? p.left + p.right === p.answer
-        : p.operation === "subtract" || p.operation === "fractionSubtract"
-          ? p.left - p.right === p.answer && p.answer >= 0
-          : p.operation === "multiply"
-            ? p.left * p.right === p.answer
-            : p.right !== 0 &&
-              p.left / p.right === p.answer &&
-              Number.isInteger(p.answer),
+    p.operation === "fractionIdentify"
+      ? Number.isInteger(p.denominator) &&
+        p.left > 0 &&
+        p.left < (p.denominator ?? 0) &&
+        p.answer === p.left
+      : p.operation === "fractionCompare"
+        ? Math.sign(p.left - p.right) === p.answer
+        : p.operation === "add" || p.operation === "fractionAdd"
+          ? p.left + p.right === p.answer
+          : p.operation === "subtract" || p.operation === "fractionSubtract"
+            ? p.left - p.right === p.answer && p.answer >= 0
+            : p.operation === "multiply"
+              ? p.left * p.right === p.answer
+              : p.right !== 0 &&
+                p.left / p.right === p.answer &&
+                Number.isInteger(p.answer),
   );
 }
 export function worksheetLines(

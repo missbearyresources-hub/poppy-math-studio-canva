@@ -36,6 +36,7 @@ const operations: Operation[] = [
   "fractionAdd",
   "fractionSubtract",
   "fractionCompare",
+  "fractionIdentify",
 ];
 const messages = defineMessages({
   fractionAdd: {
@@ -46,6 +47,25 @@ const messages = defineMessages({
     description: "Math operation",
     defaultMessage: "Subtract like-denominator fractions",
   },
+  fractionIdentify: {
+    description: "Identify a fraction from shaded and unshaded squares",
+    defaultMessage: "Identify shaded fractions",
+  },
+  visualDirections: {
+    description: "Directions for fraction models",
+    defaultMessage: "Write the fraction that is shaded.",
+  },
+  difficulty: {
+    description: "Difficulty selector",
+    defaultMessage: "Difficulty",
+  },
+  custom: {
+    description: "Use the selected manual maximum",
+    defaultMessage: "Custom",
+  },
+  easy: { description: "Difficulty option", defaultMessage: "Easy" },
+  medium: { description: "Difficulty option", defaultMessage: "Medium" },
+  hard: { description: "Difficulty option", defaultMessage: "Hard" },
   fractionCompare: {
     description: "Math operation",
     defaultMessage: "Compare like-denominator fractions",
@@ -204,6 +224,9 @@ export const App = () => {
   const [columns, setColumns] = useState(2);
   const canAddPage = supports(addPage) && supports(getDesignMetadata);
   const [count, setCount] = useState(10);
+  const [difficulty, setDifficulty] = useState<
+    "custom" | "easy" | "medium" | "hard"
+  >("custom");
   const [max, setMax] = useState(10);
   const [problems, setProblems] = useState(() =>
     generateProblems("add", 10, 10),
@@ -219,7 +242,9 @@ export const App = () => {
     const next = generateProblems(
       operation,
       count,
-      max,
+      difficulty === "custom"
+        ? max
+        : { easy: 5, medium: 10, hard: 100 }[difficulty],
       seed.trim() ? seededRandom(seed.trim()) : Math.random,
     );
     if (!checkProblems(next)) {
@@ -276,7 +301,12 @@ export const App = () => {
         ? []
         : [
             formatMessage(messages.nameDate),
-            directions.trim() || formatMessage(messages.directions),
+            directions.trim() ||
+              formatMessage(
+                problems[0]?.operation === "fractionIdentify"
+                  ? messages.visualDirections
+                  : messages.directions,
+              ),
           ];
       await addPage({
         title,
@@ -326,19 +356,38 @@ export const App = () => {
             </option>
           ))}
         </select>
-        <label htmlFor="range">{formatMessage(messages.range)}</label>
+        <label htmlFor="difficulty">{formatMessage(messages.difficulty)}</label>
         <select
-          id="range"
-          value={max}
-          onChange={(e) => setMax(Number(e.target.value))}
-          style={{ width: "100%", padding: 9 }}
+          id="difficulty"
+          value={difficulty}
+          onChange={(event) =>
+            setDifficulty(event.target.value as typeof difficulty)
+          }
         >
-          {Array.from({ length: 99 }, (_, i) => i + 2).map((n) => (
-            <option key={n} value={n}>
-              {n}
+          {(["custom", "easy", "medium", "hard"] as const).map((option) => (
+            <option key={option} value={option}>
+              {formatMessage(messages[option])}
             </option>
           ))}
         </select>
+        {difficulty === "custom" && (
+          <>
+            <label htmlFor="range">{formatMessage(messages.range)}</label>
+            <select
+              id="range"
+              value={max}
+              onChange={(e) => setMax(Number(e.target.value))}
+              style={{ width: "100%", padding: 9 }}
+            >
+              {Array.from({ length: 99 }, (_, i) => i + 2).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+
         <FormField
           label={formatMessage(messages.seed)}
           value={seed}
