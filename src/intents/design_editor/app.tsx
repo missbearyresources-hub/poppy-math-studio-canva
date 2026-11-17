@@ -1,12 +1,19 @@
 import { useFeatureSupport } from "@canva/app-hooks";
 import { Button, Checkbox, Rows, Text, Title } from "@canva/app-ui-kit";
-import { addElementAtCursor, addElementAtPoint } from "@canva/design";
+import {
+  addElementAtCursor,
+  addElementAtPoint,
+  addPage,
+  getDesignMetadata,
+} from "@canva/design";
 import { useMemo, useState } from "react";
 import { defineMessages, useIntl } from "react-intl";
 import * as styles from "styles/components.css";
 
 import { checkProblems, generateProblems, worksheetLines } from "./math";
 import type { Operation } from "./math";
+
+import { worksheetPage } from "./worksheet_page";
 
 const operations: Operation[] = ["add", "subtract", "multiply", "divide"];
 const messages = defineMessages({
@@ -110,6 +117,30 @@ const messages = defineMessages({
     description: "Successful answer key insertion feedback",
     defaultMessage: "Answer key added to your Canva design.",
   },
+  columns: {
+    description: "Worksheet column count",
+    defaultMessage: "Columns per page",
+  },
+  addPage: {
+    description: "Add a formatted worksheet page",
+    defaultMessage: "Add Worksheet Page",
+  },
+  addKeyPage: {
+    description: "Add a formatted answer key on a new page",
+    defaultMessage: "Add Answer Key Page",
+  },
+  directions: {
+    description: "Student worksheet directions",
+    defaultMessage: "Solve each problem.",
+  },
+  pageAdded: {
+    description: "Confirmation after adding a formatted page",
+    defaultMessage: "New page added to your Canva design.",
+  },
+  pageError: {
+    description: "Error adding worksheet page",
+    defaultMessage: "Could not add a page. Try a paged Canva design.",
+  },
   note: {
     description: "Description of the inserted text element",
     defaultMessage: "Adds a single editable text box to your design.",
@@ -122,6 +153,8 @@ export const App = () => {
     supports(fn),
   );
   const [operation, setOperation] = useState<Operation>("add");
+  const [columns, setColumns] = useState(2);
+  const canAddPage = supports(addPage) && supports(getDesignMetadata);
   const [count, setCount] = useState(10);
   const [max, setMax] = useState(10);
   const [problems, setProblems] = useState(() =>
@@ -169,6 +202,42 @@ export const App = () => {
       );
     } catch {
       setMessage(formatMessage(messages.error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addFormattedPage = async (answers: boolean) => {
+    if (!canAddPage || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const { defaultPageDimensions } = await getDesignMetadata();
+      if (!defaultPageDimensions) {
+        setMessage(formatMessage(messages.pageError));
+        return;
+      }
+      const title = formatMessage(
+        answers ? messages.answerTitle : messages.practice,
+      );
+      const instructions = answers
+        ? []
+        : [
+            formatMessage(messages.nameDate),
+            formatMessage(messages.directions),
+          ];
+      await addPage({
+        title,
+        elements: worksheetPage(
+          defaultPageDimensions,
+          title,
+          instructions,
+          worksheetLines(problems, answers),
+          columns,
+        ),
+      });
+      setMessage(formatMessage(messages.pageAdded));
+    } catch {
+      setMessage(formatMessage(messages.pageError));
     } finally {
       setBusy(false);
     }
@@ -266,6 +335,40 @@ export const App = () => {
         >
           {formatMessage(messages.insertKey)}
         </Button>
+        {canAddPage && (
+          <>
+            <label htmlFor="worksheet-columns">
+              {formatMessage(messages.columns)}
+            </label>
+            <select
+              id="worksheet-columns"
+              value={columns}
+              onChange={(event) => setColumns(Number(event.target.value))}
+            >
+              {[1, 2].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="primary"
+              onClick={() => addFormattedPage(false)}
+              disabled={busy}
+              stretch
+            >
+              {formatMessage(messages.addPage)}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => addFormattedPage(true)}
+              disabled={busy}
+              stretch
+            >
+              {formatMessage(messages.addKeyPage)}
+            </Button>
+          </>
+        )}
         {!addElement && <Text>{formatMessage(messages.unsupported)}</Text>}
         <div role="status">{message && <Text>{message}</Text>}</div>
         <Text size="small">{formatMessage(messages.note)}</Text>
