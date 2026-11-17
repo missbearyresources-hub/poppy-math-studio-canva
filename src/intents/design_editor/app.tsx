@@ -5,14 +5,9 @@ import { useMemo, useState } from "react";
 import { defineMessages, useIntl } from "react-intl";
 import * as styles from "styles/components.css";
 
-type Operation = "add" | "subtract" | "multiply" | "divide";
-type Problem = { a: number; b: number; answer: number; symbol: string };
-const symbols: Record<Operation, string> = {
-  add: "+",
-  subtract: "−",
-  multiply: "×",
-  divide: "÷",
-};
+import { checkProblems, generateProblems, worksheetLines } from "./math";
+import type { Operation } from "./math";
+
 const operations: Operation[] = ["add", "subtract", "multiply", "divide"];
 const messages = defineMessages({
   add: {
@@ -98,43 +93,28 @@ const messages = defineMessages({
     defaultMessage:
       "Could not add the worksheet. Try an editable Canva design.",
   },
+  generationError: {
+    description: "Error when worksheet answers fail validation",
+    defaultMessage: "Could not verify the answers. Generate a new worksheet.",
+  },
+  checked: {
+    description: "Number of problems generated and checked",
+    defaultMessage:
+      "{count, plural, one {# question} other {# questions}} generated. Answers checked.",
+  },
+  insertKey: {
+    description: "Button for inserting the answer key into Canva",
+    defaultMessage: "Add Answer Key",
+  },
+  keySuccess: {
+    description: "Successful answer key insertion feedback",
+    defaultMessage: "Answer key added to your Canva design.",
+  },
   note: {
     description: "Description of the inserted text element",
     defaultMessage: "Adds a single editable text box to your design.",
   },
 });
-function randomInt(min: number, max: number): number {
-  return min + Math.floor(Math.random() * (max - min + 1));
-}
-function makeProblems(
-  operation: Operation,
-  count: number,
-  max: number,
-): Problem[] {
-  return Array.from({ length: count }, () => {
-    let a = randomInt(0, max);
-    let b = randomInt(0, max);
-    if (operation === "subtract" && b > a) [a, b] = [b, a];
-    if (operation === "multiply") {
-      a = randomInt(0, Math.min(max, 12));
-      b = randomInt(0, Math.min(max, 12));
-    }
-    if (operation === "divide") {
-      b = randomInt(1, Math.min(max, 12));
-      const quotient = randomInt(0, Math.min(max, 12));
-      a = b * quotient;
-    }
-    const answer =
-      operation === "add"
-        ? a + b
-        : operation === "subtract"
-          ? a - b
-          : operation === "multiply"
-            ? a * b
-            : a / b;
-    return { a, b, answer, symbol: symbols[operation] };
-  });
-}
 export const App = () => {
   const { formatMessage } = useIntl();
   const supports = useFeatureSupport();
@@ -144,43 +124,49 @@ export const App = () => {
   const [operation, setOperation] = useState<Operation>("add");
   const [count, setCount] = useState(10);
   const [max, setMax] = useState(10);
-  const [problems, setProblems] = useState<Problem[]>(() =>
-    makeProblems("add", 10, 10),
+  const [problems, setProblems] = useState(() =>
+    generateProblems("add", 10, 10),
   );
   const [showAnswers, setShowAnswers] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const lines = useMemo(
-    () =>
-      problems.map(
-        (p, i) =>
-          `${String(i + 1).padStart(2, " ")}.  ${p.a} ${p.symbol} ${p.b} = ${showAnswers ? p.answer : "_____"}`,
-      ),
+    () => worksheetLines(problems, showAnswers),
     [problems, showAnswers],
   );
   const generate = () => {
-    setProblems(makeProblems(operation, count, max));
-    setMessage("");
+    const next = generateProblems(operation, count, max);
+    if (!checkProblems(next)) {
+      setMessage(formatMessage(messages.generationError));
+      return;
+    }
+    setProblems(next);
+    setMessage(formatMessage(messages.checked, { count: next.length }));
   };
-  const addToDesign = async () => {
+  const addToDesign = async (answers: boolean) => {
     if (!addElement || busy) return;
+    const exportLines = worksheetLines(problems, answers);
     setBusy(true);
     setMessage("");
     try {
       await addElement({
         type: "text",
         children: [
-          showAnswers
-            ? formatMessage(messages.answerTitle) + "\n\n" + lines.join("\n")
+          answers
+            ? formatMessage(messages.answerTitle) +
+              "\n\n" +
+              exportLines.join("\n")
             : [
                 formatMessage(messages.worksheetTitle),
                 formatMessage(messages.nameDate),
                 "",
-                ...lines,
+                ...exportLines,
               ].join("\n"),
         ],
       });
-      setMessage(formatMessage(messages.success));
+      setMessage(
+        formatMessage(answers ? messages.keySuccess : messages.success),
+      );
     } catch {
       setMessage(formatMessage(messages.error));
     } finally {
@@ -212,7 +198,7 @@ export const App = () => {
           onChange={(e) => setCount(Number(e.target.value))}
           style={{ width: "100%", padding: 9 }}
         >
-          {[5, 10, 15, 20].map((n) => (
+          {Array.from({ length: 40 }, (_, i) => i + 1).map((n) => (
             <option key={n} value={n}>
               {n}
             </option>
@@ -225,7 +211,7 @@ export const App = () => {
           onChange={(e) => setMax(Number(e.target.value))}
           style={{ width: "100%", padding: 9 }}
         >
-          {[5, 10, 20, 50, 100].map((n) => (
+          {Array.from({ length: 99 }, (_, i) => i + 2).map((n) => (
             <option key={n} value={n}>
               {n}
             </option>
@@ -266,14 +252,22 @@ export const App = () => {
         </div>
         <Button
           variant="primary"
-          onClick={addToDesign}
+          onClick={() => addToDesign(false)}
           disabled={!addElement || busy}
           stretch
         >
           {formatMessage(busy ? messages.adding : messages.insert)}
         </Button>
+        <Button
+          variant="secondary"
+          onClick={() => addToDesign(true)}
+          disabled={!addElement || busy}
+          stretch
+        >
+          {formatMessage(messages.insertKey)}
+        </Button>
         {!addElement && <Text>{formatMessage(messages.unsupported)}</Text>}
-        {message && <Text>{message}</Text>}
+        <div role="status">{message && <Text>{message}</Text>}</div>
         <Text size="small">{formatMessage(messages.note)}</Text>
       </Rows>
     </div>

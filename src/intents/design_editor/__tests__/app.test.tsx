@@ -29,7 +29,7 @@ describe("Poppy Math Studio", () => {
         target: { value: operation },
       });
       fireEvent.change(view.getByLabelText("Questions"), {
-        target: { value: "20" },
+        target: { value: "40" },
       });
       fireEvent.change(view.getByLabelText(/^Maximum operand/), {
         target: { value: "5" },
@@ -39,13 +39,13 @@ describe("Poppy Math Studio", () => {
       const questions = Array.from(
         (preview?.textContent ?? "").matchAll(/(\d+) ([+−×÷]) (\d+) = _____/g),
       );
-      expect(questions).toHaveLength(20);
+      expect(questions).toHaveLength(40);
 
       fireEvent.click(view.getByRole("checkbox", { name: /Show answers/ }));
       const answers = Array.from(
         (preview?.textContent ?? "").matchAll(/(\d+) ([+−×÷]) (\d+) = (\d+)/g),
       );
-      expect(answers).toHaveLength(20);
+      expect(answers).toHaveLength(40);
       answers.forEach(([equation, a, operator, b, answer], index) => {
         expect(equation.replace(/= \d+$/, "= _____")).toBe(
           questions[index]?.[0],
@@ -68,8 +68,9 @@ describe("Poppy Math Studio", () => {
 
   it("inserts editable student and answer-key text using the supported SDK method", async () => {
     const view = renderInTestProvider(<App />);
-    const button = view.getByRole("button", { name: "Add to Design" });
-    fireEvent.click(button);
+    const previewAnswers = view.getByRole("checkbox", { name: /Show answers/ });
+    fireEvent.click(previewAnswers);
+    fireEvent.click(view.getByRole("button", { name: "Add to Design" }));
     await view.findByText("Worksheet added to your Canva design.");
     const worksheet = insertion.mock.calls[0]?.[0];
     expect(worksheet).toEqual({
@@ -78,10 +79,10 @@ describe("Poppy Math Studio", () => {
     });
     expect(JSON.stringify(worksheet)).toContain(" = _____");
 
-    fireEvent.click(view.getByRole("checkbox", { name: /Show answers/ }));
-    fireEvent.click(button);
+    fireEvent.click(previewAnswers);
+    fireEvent.click(view.getByRole("button", { name: "Add Answer Key" }));
     await waitFor(() => expect(insertion).toHaveBeenCalledTimes(2));
-    await view.findByText("Worksheet added to your Canva design.");
+    await view.findByText("Answer key added to your Canva design.");
     const key = insertion.mock.calls[1]?.[0];
     expect(key).toEqual({
       type: "text",
