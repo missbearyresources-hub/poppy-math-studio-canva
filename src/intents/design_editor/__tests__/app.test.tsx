@@ -1,64 +1,116 @@
 import { useFeatureSupport } from "@canva/app-hooks";
 import { addElementAtCursor, addElementAtPoint } from "@canva/design";
-import type { Feature } from "@canva/platform";
-import { requestOpenExternalUrl } from "@canva/platform";
-import { fireEvent } from "@testing-library/react";
-import { App, DOCS_URL } from "../app";
+import { fireEvent, waitFor } from "@testing-library/react";
+import { App } from "../app";
 import { renderInTestProvider } from "../../../utils/test_render";
 
 jest.mock("@canva/app-hooks");
 
-// This test demonstrates how to test code that uses functions from the Canva Apps SDK
-// For more information on testing with the Canva Apps SDK, see https://www.canva.dev/docs/apps/testing/
-describe("Hello World Tests", () => {
-  const mockIsSupported = jest.fn();
-  const mockUseFeatureSupport = jest.mocked(useFeatureSupport);
-  const mockRequestOpenExternalUrl = jest.mocked(requestOpenExternalUrl);
+describe("Poppy Math Studio", () => {
+  const supports = jest.fn();
+  const insertion = jest.mocked(addElementAtPoint);
 
   beforeEach(() => {
     jest.resetAllMocks();
-    mockIsSupported.mockImplementation(
-      (fn: Feature) => fn === addElementAtPoint,
-    );
-    mockUseFeatureSupport.mockReturnValue(mockIsSupported);
-    mockRequestOpenExternalUrl.mockResolvedValue({ status: "completed" });
+    jest.mocked(useFeatureSupport).mockReturnValue(supports);
+    supports.mockImplementation((feature) => feature === addElementAtPoint);
   });
 
-  it("should add a text element when the button is clicked", () => {
-    expect(mockUseFeatureSupport).not.toHaveBeenCalled();
-    expect(addElementAtPoint).not.toHaveBeenCalled();
+  it.each([
+    ["add", "+", (a: number, b: number) => a + b],
+    ["subtract", "−", (a: number, b: number) => a - b],
+    ["multiply", "×", (a: number, b: number) => a * b],
+    ["divide", "÷", (a: number, b: number) => a / b],
+  ] as const)(
+    "generates %s questions with matching answers",
+    (operation, symbol, solve) => {
+      const view = renderInTestProvider(<App />);
+      fireEvent.change(view.getByLabelText("Math operation"), {
+        target: { value: operation },
+      });
+      fireEvent.change(view.getByLabelText("Questions"), {
+        target: { value: "40" },
+      });
+      fireEvent.change(view.getByLabelText(/^Maximum operand/), {
+        target: { value: "5" },
+      });
+      fireEvent.click(view.getByRole("button", { name: "Generate Questions" }));
+      const preview = view.getByText("Math Practice").parentElement;
+      const questions = Array.from(
+        (preview?.textContent ?? "").matchAll(/(\d+) ([+−×÷]) (\d+) = _____/g),
+      );
+      expect(questions).toHaveLength(40);
 
-    const result = renderInTestProvider(<App />);
+      fireEvent.click(view.getByRole("checkbox", { name: /Show answers/ }));
+      const answers = Array.from(
+        (preview?.textContent ?? "").matchAll(/(\d+) ([+−×÷]) (\d+) = (\d+)/g),
+      );
+      expect(answers).toHaveLength(40);
+      answers.forEach(([equation, a, operator, b, answer], index) => {
+        expect(equation.replace(/= \d+$/, "= _____")).toBe(
+          questions[index]?.[0],
+        );
+        expect(operator).toBe(symbol);
+        expect(Number(b)).toBeLessThanOrEqual(5);
+        const expected = solve(Number(a), Number(b));
+        expect(Number.isInteger(expected)).toBe(true);
+        expect(expected).toBeGreaterThanOrEqual(0);
+        expect(Number(answer)).toBe(expected);
+        expect(Number(b)).toBeGreaterThanOrEqual(
+          operation === "divide" ? 1 : 0,
+        );
+        expect(
+          operation === "divide" ? expected : Number(a),
+        ).toBeLessThanOrEqual(5);
+      });
+    },
+  );
 
-    expect(mockUseFeatureSupport).toHaveBeenCalled();
-    expect(addElementAtPoint).not.toHaveBeenCalled();
-
-    const doSomethingCoolBtn = result.getByRole("button", {
-      name: "Do something cool",
+  it("inserts editable student and answer-key text using the supported SDK method", async () => {
+    const view = renderInTestProvider(<App />);
+    const previewAnswers = view.getByRole("checkbox", { name: /Show answers/ });
+    fireEvent.click(previewAnswers);
+    fireEvent.click(view.getByRole("button", { name: "Add to Design" }));
+    await view.findByText("Worksheet added to your Canva design.");
+    const worksheet = insertion.mock.calls[0]?.[0];
+    expect(worksheet).toEqual({
+      type: "text",
+      children: [expect.stringContaining("Name:")],
     });
+    expect(JSON.stringify(worksheet)).toContain(" = _____");
 
-    fireEvent.click(doSomethingCoolBtn);
-
-    expect(mockIsSupported).toHaveBeenCalledWith(addElementAtPoint);
-    expect(mockIsSupported).not.toHaveBeenCalledWith(addElementAtCursor);
-    expect(addElementAtPoint).toHaveBeenCalled();
+    fireEvent.click(previewAnswers);
+    fireEvent.click(view.getByRole("button", { name: "Add Answer Key" }));
+    await waitFor(() => expect(insertion).toHaveBeenCalledTimes(2));
+    await view.findByText("Answer key added to your Canva design.");
+    const key = insertion.mock.calls[1]?.[0];
+    expect(key).toEqual({
+      type: "text",
+      children: [expect.stringMatching(/^ANSWER KEY\n\n[\s\S]+ = \d/)],
+    });
+    expect(JSON.stringify(key)).not.toContain("_____");
+    expect(addElementAtCursor).not.toHaveBeenCalled();
   });
 
-  it("should call `requestOpenExternalUrl` when the button is clicked", () => {
-    expect(mockRequestOpenExternalUrl).not.toHaveBeenCalled();
+  it("uses cursor insertion when point insertion is unavailable and reports SDK failure", async () => {
+    supports.mockImplementation((feature) => feature === addElementAtCursor);
+    jest
+      .mocked(addElementAtCursor)
+      .mockRejectedValueOnce(new Error("Insertion failed"));
+    const view = renderInTestProvider(<App />);
+    fireEvent.click(view.getByRole("button", { name: "Add to Design" }));
+    await view.findByText(/Could not add the worksheet/);
+    expect(addElementAtCursor).toHaveBeenCalledTimes(1);
+    expect(insertion).not.toHaveBeenCalled();
+  });
 
-    const result = renderInTestProvider(<App />);
-
-    const sdkButton = result.getByRole("button", {
-      name: "Open Canva Apps SDK docs",
-    });
-
-    expect(mockRequestOpenExternalUrl).not.toHaveBeenCalled();
-    fireEvent.click(sdkButton);
-    expect(mockRequestOpenExternalUrl).toHaveBeenCalled();
-
-    expect(mockRequestOpenExternalUrl.mock.calls[0]?.[0]).toEqual({
-      url: DOCS_URL,
-    });
+  it("disables insertion when neither SDK method is supported", () => {
+    supports.mockReturnValue(false);
+    const view = renderInTestProvider(<App />);
+    expect(
+      view
+        .getByRole("button", { name: "Add to Design" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
   });
 });

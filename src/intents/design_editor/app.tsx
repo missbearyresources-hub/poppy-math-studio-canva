@@ -1,84 +1,274 @@
 import { useFeatureSupport } from "@canva/app-hooks";
-import { Button, Rows, Text } from "@canva/app-ui-kit";
+import { Button, Checkbox, Rows, Text, Title } from "@canva/app-ui-kit";
 import { addElementAtCursor, addElementAtPoint } from "@canva/design";
-import { requestOpenExternalUrl } from "@canva/platform";
-import { FormattedMessage, useIntl } from "react-intl";
+import { useMemo, useState } from "react";
+import { defineMessages, useIntl } from "react-intl";
 import * as styles from "styles/components.css";
 
-export const DOCS_URL = "https://www.canva.dev/docs/apps/";
+import { checkProblems, generateProblems, worksheetLines } from "./math";
+import type { Operation } from "./math";
 
+const operations: Operation[] = ["add", "subtract", "multiply", "divide"];
+const messages = defineMessages({
+  add: {
+    description: "Addition option and symbol",
+    defaultMessage: "Addition +",
+  },
+  subtract: {
+    description: "Subtraction option and symbol",
+    defaultMessage: "Subtraction −",
+  },
+  multiply: {
+    description: "Multiplication option and symbol",
+    defaultMessage: "Multiplication ×",
+  },
+  divide: {
+    description: "Division option and symbol",
+    defaultMessage: "Division ÷",
+  },
+  title: { description: "App title", defaultMessage: "Poppy Math Studio V26" },
+  intro: {
+    description: "Introduction to the worksheet generator",
+    defaultMessage: "Generate math practice and add it to your Canva design.",
+  },
+  operation: {
+    description: "Operation picker label",
+    defaultMessage: "Math operation",
+  },
+  count: {
+    description: "Question count picker label",
+    defaultMessage: "Questions",
+  },
+  range: {
+    description: "Operand range picker label and limits",
+    defaultMessage:
+      "Maximum operand for addition and subtraction. Multiplication factors, division divisors, and quotients are capped at 12.",
+  },
+  generate: {
+    description: "Generate button label",
+    defaultMessage: "Generate Questions",
+  },
+  answers: {
+    description: "Checkbox label for answer-key mode",
+    defaultMessage: "Show answers (answer key preview)",
+  },
+  practice: {
+    description: "Student worksheet preview heading",
+    defaultMessage: "Math Practice",
+  },
+  worksheetTitle: {
+    description: "Student worksheet Canva text heading",
+    defaultMessage: "POPPY MATH STUDIO",
+  },
+  answerTitle: {
+    description: "Answer key heading",
+    defaultMessage: "ANSWER KEY",
+  },
+  name: {
+    description: "Student name field in the preview",
+    defaultMessage: "Name: ____________________",
+  },
+  nameDate: {
+    description: "Student name and date fields in Canva",
+    defaultMessage: "Name: ____________________  Date: __________",
+  },
+  adding: {
+    description: "Canva insertion in progress",
+    defaultMessage: "Adding…",
+  },
+  insert: {
+    description: "Button for inserting into Canva",
+    defaultMessage: "Add to Design",
+  },
+  unsupported: {
+    description: "Hint for unsupported design types",
+    defaultMessage: "This design does not support inserting text elements.",
+  },
+  success: {
+    description: "Successful insertion feedback",
+    defaultMessage: "Worksheet added to your Canva design.",
+  },
+  error: {
+    description: "Failed insertion feedback",
+    defaultMessage:
+      "Could not add the worksheet. Try an editable Canva design.",
+  },
+  generationError: {
+    description: "Error when worksheet answers fail validation",
+    defaultMessage: "Could not verify the answers. Generate a new worksheet.",
+  },
+  checked: {
+    description: "Number of problems generated and checked",
+    defaultMessage:
+      "{count, plural, one {# question} other {# questions}} generated. Answers checked.",
+  },
+  insertKey: {
+    description: "Button for inserting the answer key into Canva",
+    defaultMessage: "Add Answer Key",
+  },
+  keySuccess: {
+    description: "Successful answer key insertion feedback",
+    defaultMessage: "Answer key added to your Canva design.",
+  },
+  note: {
+    description: "Description of the inserted text element",
+    defaultMessage: "Adds a single editable text box to your design.",
+  },
+});
 export const App = () => {
-  const isSupported = useFeatureSupport();
+  const { formatMessage } = useIntl();
+  const supports = useFeatureSupport();
   const addElement = [addElementAtPoint, addElementAtCursor].find((fn) =>
-    isSupported(fn),
+    supports(fn),
   );
-  const onClick = () => {
-    if (!addElement) {
+  const [operation, setOperation] = useState<Operation>("add");
+  const [count, setCount] = useState(10);
+  const [max, setMax] = useState(10);
+  const [problems, setProblems] = useState(() =>
+    generateProblems("add", 10, 10),
+  );
+  const [showAnswers, setShowAnswers] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const lines = useMemo(
+    () => worksheetLines(problems, showAnswers),
+    [problems, showAnswers],
+  );
+  const generate = () => {
+    const next = generateProblems(operation, count, max);
+    if (!checkProblems(next)) {
+      setMessage(formatMessage(messages.generationError));
       return;
     }
-
-    addElement({
-      type: "text",
-      children: ["Hello world!"],
-    });
+    setProblems(next);
+    setMessage(formatMessage(messages.checked, { count: next.length }));
   };
-
-  const openExternalUrl = async (url: string) => {
-    const response = await requestOpenExternalUrl({
-      url,
-    });
-
-    if (response.status === "aborted") {
-      // user decided not to navigate to the link
+  const addToDesign = async (answers: boolean) => {
+    if (!addElement || busy) return;
+    const exportLines = worksheetLines(problems, answers);
+    setBusy(true);
+    setMessage("");
+    try {
+      await addElement({
+        type: "text",
+        children: [
+          answers
+            ? formatMessage(messages.answerTitle) +
+              "\n\n" +
+              exportLines.join("\n")
+            : [
+                formatMessage(messages.worksheetTitle),
+                formatMessage(messages.nameDate),
+                "",
+                ...exportLines,
+              ].join("\n"),
+        ],
+      });
+      setMessage(
+        formatMessage(answers ? messages.keySuccess : messages.success),
+      );
+    } catch {
+      setMessage(formatMessage(messages.error));
+    } finally {
+      setBusy(false);
     }
   };
-
-  const intl = useIntl();
-
   return (
-    <div className={styles.scrollContainer}>
+    <div className={styles.scrollContainer} style={{ padding: 16 }}>
       <Rows spacing="2u">
-        <Text>
-          <FormattedMessage
-            defaultMessage="
-              To make changes to this app, edit the <code>src/app.tsx</code> file,
-              then close and reopen the app in the editor to preview the changes.
-            "
-            description="Instructions for how to make changes to the app. Do not translate <code>src/app.tsx</code>."
-            values={{
-              code: (chunks) => <code>{chunks}</code>,
-            }}
-          />
-        </Text>
+        <Title size="small">{formatMessage(messages.title)}</Title>
+        <Text>{formatMessage(messages.intro)}</Text>
+        <label htmlFor="operation">{formatMessage(messages.operation)}</label>
+        <select
+          id="operation"
+          value={operation}
+          onChange={(e) => setOperation(e.target.value as Operation)}
+          style={{ width: "100%", padding: 9 }}
+        >
+          {operations.map((op) => (
+            <option key={op} value={op}>
+              {formatMessage(messages[op])}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="count">{formatMessage(messages.count)}</label>
+        <select
+          id="count"
+          value={count}
+          onChange={(e) => setCount(Number(e.target.value))}
+          style={{ width: "100%", padding: 9 }}
+        >
+          {Array.from({ length: 40 }, (_, i) => i + 1).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="range">{formatMessage(messages.range)}</label>
+        <select
+          id="range"
+          value={max}
+          onChange={(e) => setMax(Number(e.target.value))}
+          style={{ width: "100%", padding: 9 }}
+        >
+          {Array.from({ length: 99 }, (_, i) => i + 2).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <Button variant="secondary" onClick={generate} stretch>
+          {formatMessage(messages.generate)}
+        </Button>
+        <Checkbox
+          checked={showAnswers}
+          onChange={(_, checked) => setShowAnswers(checked)}
+          label={formatMessage(messages.answers)}
+        />
+        <div
+          style={{
+            whiteSpace: "pre-wrap",
+            fontFamily: "monospace",
+            background: "#fff",
+            border: "1px solid #d9d9e0",
+            borderRadius: 8,
+            padding: 12,
+            lineHeight: 1.8,
+            maxHeight: 340,
+            overflowY: "auto",
+          }}
+        >
+          <strong>
+            {formatMessage(
+              showAnswers ? messages.answerTitle : messages.practice,
+            )}
+          </strong>
+          {[
+            "",
+            ...(showAnswers ? [] : [formatMessage(messages.name)]),
+            "",
+            ...lines,
+          ].join("\n")}
+        </div>
         <Button
           variant="primary"
-          onClick={onClick}
-          disabled={!addElement}
-          tooltipLabel={
-            !addElement
-              ? intl.formatMessage({
-                  defaultMessage:
-                    "This feature is not supported in the current page",
-                  description:
-                    "Tooltip label for when a feature is not supported in the current design",
-                })
-              : undefined
-          }
+          onClick={() => addToDesign(false)}
+          disabled={!addElement || busy}
           stretch
         >
-          {intl.formatMessage({
-            defaultMessage: "Do something cool",
-            description:
-              "Button text to do something cool. Creates a new text element when pressed.",
-          })}
+          {formatMessage(busy ? messages.adding : messages.insert)}
         </Button>
-        <Button variant="secondary" onClick={() => openExternalUrl(DOCS_URL)}>
-          {intl.formatMessage({
-            defaultMessage: "Open Canva Apps SDK docs",
-            description:
-              "Button text to open Canva Apps SDK docs. Opens an external URL when pressed.",
-          })}
+        <Button
+          variant="secondary"
+          onClick={() => addToDesign(true)}
+          disabled={!addElement || busy}
+          stretch
+        >
+          {formatMessage(messages.insertKey)}
         </Button>
+        {!addElement && <Text>{formatMessage(messages.unsupported)}</Text>}
+        <div role="status">{message && <Text>{message}</Text>}</div>
+        <Text size="small">{formatMessage(messages.note)}</Text>
       </Rows>
     </div>
   );
