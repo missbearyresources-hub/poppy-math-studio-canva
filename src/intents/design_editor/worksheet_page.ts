@@ -60,29 +60,27 @@ export function worksheetPage(
       const barWidth = size * cells.length;
       const answerLeft = barLeft + barWidth + size * 0.65;
       const rectangle = (x: number, y: number, w: number, h: number) =>
-        `M ${x} ${y} h ${w} v ${h} h ${-w} Z`;
+        `M ${x} ${y} L ${x + w} ${y} L ${x + w} ${y + h} L ${x} ${y + h} L ${x} ${y}`;
       const paths = [
         {
           d: rectangle(0, 0, cells.length * 12, 12),
           fill: { color: "#000000" },
         },
       ];
-      const unshaded = Array.from(cells, (cell, i) =>
-        cell === "□" ? rectangle(i * 12 + 1, 1, 10, 10) : "",
-      ).join(" ");
-      if (unshaded.trim())
-        paths.push({ d: unshaded, fill: { color: "#ffffff" } });
-      const divisions = Array.from(cells.slice(1), (_, i) =>
-        rectangle((i + 1) * 12 - 0.5, 0, 1, 12),
-      ).join(" ");
-      if (divisions) paths.push({ d: divisions, fill: { color: "#000000" } });
-      const shadedDivisions = Array.from(cells.slice(1), (cell, i) =>
-        cell === "■" && cells[i] === "■"
-          ? rectangle((i + 1) * 12 - 0.5, 1, 1, 10)
-          : "",
-      ).join(" ");
-      if (shadedDivisions.trim())
-        paths.push({ d: shadedDivisions, fill: { color: "#ffffff" } });
+      // Each Canva path must contain exactly one move command.
+      for (const [index, cell] of Array.from(cells).entries()) {
+        if (cell === "□") {
+          paths.push({
+            d: rectangle(index * 12 + 1, 1, 10, 10),
+            fill: { color: "#ffffff" },
+          });
+        } else if (index > 0) {
+          paths.push({
+            d: rectangle(index * 12 - 0.5, 1, 1, 10),
+            fill: { color: "#ffffff" },
+          });
+        }
+      }
       return [
         text(number.trim(), left, top, size * 2.9, size),
         {
