@@ -488,28 +488,30 @@ export const App = () => {
             ...(showAnswers ? [] : [formatMessage(messages.name)]),
             "",
           ].join("\n")}
-          {lines.map((line, i) => (
-            <div key={problems[i]?.id}>
-              {Array.from(line, (character, index) =>
-                character === "■" || character === "□" ? (
-                  <span
-                    key={index}
-                    style={{
-                      display: "inline-block",
-                      width: "0.85em",
-                      height: "0.85em",
-                      verticalAlign: "middle",
-                      border: "1px solid #000",
-                      boxSizing: "border-box",
-                      background: character === "■" ? "#000" : "#fff",
-                    }}
-                  />
-                ) : (
-                  character
-                ),
-              )}
-            </div>
-          ))}
+          {problems[0]?.operation !== "fractionIdentify"
+            ? lines.join("\n")
+            : lines.map((line, i) => (
+                <div key={problems[i]?.id}>
+                  {Array.from(line, (character, index) =>
+                    character === "■" || character === "□" ? (
+                      <span
+                        key={index}
+                        style={{
+                          display: "inline-block",
+                          width: "0.85em",
+                          height: "0.85em",
+                          verticalAlign: "middle",
+                          border: "1px solid #000",
+                          boxSizing: "border-box",
+                          background: character === "■" ? "#000" : "#fff",
+                        }}
+                      />
+                    ) : (
+                      character
+                    ),
+                  )}
+                </div>
+              ))}
         </div>
         <Button
           variant="primary"

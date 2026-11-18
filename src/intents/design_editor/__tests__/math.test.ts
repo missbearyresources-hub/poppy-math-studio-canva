@@ -23,7 +23,7 @@ describe("worksheet answer formatting", () => {
 
   it("adds and subtracts integer hundredths exactly", () => {
     let index = 0;
-    const random = () => [0.29, 0.09][index++ % 2] ?? 0;
+    const random = () => [0.295, 0.095][index++ % 2] ?? 0;
     const sum = generateProblems("decimalAdd", 1, 100, random);
     const difference = generateProblems("decimalSubtract", 1, 100, random);
     expect(checkProblems([...sum, ...difference])).toBe(true);
