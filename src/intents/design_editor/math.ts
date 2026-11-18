@@ -6,6 +6,8 @@ export type Operation =
   | "fractionAdd"
   | "fractionSubtract"
   | "fractionCompare"
+  | "fractionMultiply"
+  | "fractionDivide"
   | "fractionIdentify"
   | "decimalAdd"
   | "decimalSubtract";
@@ -17,6 +19,8 @@ export type Problem = {
   answer: number;
   display: string;
   denominator?: number;
+  rightDenominator?: number;
+  answerDenominator?: number;
 };
 const symbols: Record<Operation, string> = {
   add: "+",
@@ -26,6 +30,8 @@ const symbols: Record<Operation, string> = {
   fractionAdd: "+",
   fractionSubtract: "−",
   fractionCompare: "?",
+  fractionMultiply: "×",
+  fractionDivide: "÷",
   fractionIdentify: "=",
   decimalAdd: "+",
   decimalSubtract: "−",
@@ -63,6 +69,14 @@ export function generateProblems(
       a = randomInt(1, denominator - 1, random);
       b = randomInt(1, denominator - 1, random);
     }
+    const rightDenominator =
+      operation === "fractionMultiply" || operation === "fractionDivide"
+        ? randomInt(2, Math.min(max, 12), random)
+        : denominator;
+    if (rightDenominator && rightDenominator !== denominator) {
+      b = randomInt(1, rightDenominator - 1, random);
+    }
+    let answerDenominator = denominator;
     let answer: number;
     switch (operation) {
       case "add":
@@ -91,6 +105,14 @@ export function generateProblems(
       case "fractionCompare":
         answer = Math.sign(a - b);
         break;
+      case "fractionMultiply":
+        answer = a * b;
+        answerDenominator = (denominator ?? 1) * (rightDenominator ?? 1);
+        break;
+      case "fractionDivide":
+        answer = a * (rightDenominator ?? 1);
+        answerDenominator = (denominator ?? 1) * b;
+        break;
       case "fractionIdentify":
         answer = a;
         break;
@@ -104,12 +126,14 @@ export function generateProblems(
       operation,
       answer,
       denominator,
+      rightDenominator,
+      answerDenominator,
       display: denominator
         ? operation === "fractionIdentify"
           ? `${"■".repeat(a)}${"□".repeat(denominator - a)} = _____`
           : operation === "fractionCompare"
             ? `${a}/${denominator} _____ ${b}/${denominator}`
-            : `${a}/${denominator} ${symbols[operation]} ${b}/${denominator} = _____`
+            : `${a}/${denominator} ${symbols[operation]} ${b}/${rightDenominator} = _____`
         : operation.startsWith("decimal")
           ? `${decimal(a)} ${symbols[operation]} ${decimal(b)} = _____`
           : `${a} ${symbols[operation]} ${b} = _____`,
@@ -119,26 +143,33 @@ export function generateProblems(
 }
 export function checkProblems(problems: Problem[]): boolean {
   return problems.every((p) =>
-    p.operation === "fractionIdentify"
-      ? Number.isInteger(p.denominator) &&
-        p.left > 0 &&
-        p.left < (p.denominator ?? 0) &&
-        p.answer === p.left
-      : p.operation === "fractionCompare"
-        ? Math.sign(p.left - p.right) === p.answer
-        : p.operation === "add" ||
-            p.operation === "fractionAdd" ||
-            p.operation === "decimalAdd"
-          ? p.left + p.right === p.answer
-          : p.operation === "subtract" ||
-              p.operation === "fractionSubtract" ||
-              p.operation === "decimalSubtract"
-            ? p.left - p.right === p.answer && p.answer >= 0
-            : p.operation === "multiply"
-              ? p.left * p.right === p.answer
-              : p.right !== 0 &&
-                p.left / p.right === p.answer &&
-                Number.isInteger(p.answer),
+    p.operation === "fractionMultiply"
+      ? p.answer === p.left * p.right &&
+        p.answerDenominator === (p.denominator ?? 0) * (p.rightDenominator ?? 0)
+      : p.operation === "fractionDivide"
+        ? p.right !== 0 &&
+          p.answer === p.left * (p.rightDenominator ?? 0) &&
+          p.answerDenominator === (p.denominator ?? 0) * p.right
+        : p.operation === "fractionIdentify"
+          ? Number.isInteger(p.denominator) &&
+            p.left > 0 &&
+            p.left < (p.denominator ?? 0) &&
+            p.answer === p.left
+          : p.operation === "fractionCompare"
+            ? Math.sign(p.left - p.right) === p.answer
+            : p.operation === "add" ||
+                p.operation === "fractionAdd" ||
+                p.operation === "decimalAdd"
+              ? p.left + p.right === p.answer
+              : p.operation === "subtract" ||
+                  p.operation === "fractionSubtract" ||
+                  p.operation === "decimalSubtract"
+                ? p.left - p.right === p.answer && p.answer >= 0
+                : p.operation === "multiply"
+                  ? p.left * p.right === p.answer
+                  : p.right !== 0 &&
+                    p.left / p.right === p.answer &&
+                    Number.isInteger(p.answer),
   );
 }
 function decimal(hundredths: number): string {
@@ -169,7 +200,7 @@ export function worksheetLines(
         : p.denominator
           ? p.operation === "fractionIdentify"
             ? `${p.answer}/${p.denominator}`
-            : simplifiedFraction(p.answer, p.denominator)
+            : simplifiedFraction(p.answer, p.answerDenominator ?? p.denominator)
           : p.operation.startsWith("decimal")
             ? decimal(p.answer)
             : String(p.answer);
@@ -186,3 +217,6 @@ export function seededRandom(seed: string): () => number {
     return state / 4294967296;
   };
 }
+
+export const fractionParts = (line: string): string[] =>
+  line.split(/(\d+\/\d+)/);

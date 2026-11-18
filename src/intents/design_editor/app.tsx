@@ -22,6 +22,7 @@ import * as styles from "styles/components.css";
 
 import {
   checkProblems,
+  fractionParts,
   generateProblems,
   seededRandom,
   worksheetLines,
@@ -37,6 +38,8 @@ const operations: Operation[] = [
   "divide",
   "fractionAdd",
   "fractionSubtract",
+  "fractionMultiply",
+  "fractionDivide",
   "fractionCompare",
   "fractionIdentify",
   "decimalAdd",
@@ -74,6 +77,14 @@ const messages = defineMessages({
   fractionSubtract: {
     description: "Math operation",
     defaultMessage: "Subtract like-denominator fractions",
+  },
+  fractionMultiply: {
+    description: "Math operation",
+    defaultMessage: "Multiply fractions",
+  },
+  fractionDivide: {
+    description: "Math operation",
+    defaultMessage: "Divide fractions",
   },
   fractionIdentify: {
     description: "Identify a fraction from shaded and unshaded squares",
@@ -488,43 +499,66 @@ export const App = () => {
             ...(showAnswers ? [] : [formatMessage(messages.name)]),
             "",
           ].join("\n")}
-          {problems[0]?.operation !== "fractionIdentify"
+          {!problems[0]?.denominator
             ? lines.join("\n")
             : lines.map((line, i) => (
                 <div key={problems[i]?.id}>
-                  {Array.from(line, (character, index) =>
-                    character === "■" || character === "□" ? (
-                      <span
-                        key={index}
-                        style={{
-                          display: "inline-block",
-                          width: "0.85em",
-                          height: "0.85em",
-                          verticalAlign: "middle",
-                          border: "1px solid #000",
-                          boxSizing: "border-box",
-                          background: character === "■" ? "#000" : "#fff",
-                        }}
-                      />
-                    ) : (
-                      character
-                    ),
-                  )}
+                  {fractionParts(line).map((part, index) => {
+                    if (index % 2) {
+                      const [numerator, denominator] = part.split("/");
+                      return (
+                        <span
+                          key={index}
+                          style={{
+                            display: "inline-flex",
+                            verticalAlign: "middle",
+                            flexDirection: "column",
+                            textAlign: "center",
+                            lineHeight: 1.2,
+                            marginInline: 3,
+                            minWidth: "1em",
+                          }}
+                        >
+                          <span
+                            style={{ borderBottom: "1px solid currentColor" }}
+                          >
+                            {numerator}
+                          </span>
+                          <span>{denominator}</span>
+                        </span>
+                      );
+                    }
+                    return Array.from(part, (character, position) =>
+                      character === "■" || character === "□" ? (
+                        <span
+                          key={`${index}-${position}`}
+                          style={{
+                            display: "inline-block",
+                            width: "0.85em",
+                            height: "0.85em",
+                            verticalAlign: "middle",
+                            border: "1px solid #000",
+                            boxSizing: "border-box",
+                            background: character === "■" ? "#000" : "#fff",
+                          }}
+                        />
+                      ) : (
+                        character
+                      ),
+                    );
+                  })}
                 </div>
               ))}
         </div>
         <Button
           variant="primary"
           onClick={() =>
-            problems[0]?.operation === "fractionIdentify"
+            problems[0]?.denominator
               ? addFormattedPage(false)
               : addToDesign(false)
           }
           disabled={
-            busy ||
-            (problems[0]?.operation === "fractionIdentify"
-              ? !canAddPage
-              : !addElement)
+            busy || (problems[0]?.denominator ? !canAddPage : !addElement)
           }
           stretch
         >
@@ -533,15 +567,12 @@ export const App = () => {
         <Button
           variant="secondary"
           onClick={() =>
-            problems[0]?.operation === "fractionIdentify"
+            problems[0]?.denominator
               ? addFormattedPage(true)
               : addToDesign(true)
           }
           disabled={
-            busy ||
-            (problems[0]?.operation === "fractionIdentify"
-              ? !canAddPage
-              : !addElement)
+            busy || (problems[0]?.denominator ? !canAddPage : !addElement)
           }
           stretch
         >
