@@ -6,7 +6,9 @@ export type Operation =
   | "fractionAdd"
   | "fractionSubtract"
   | "fractionCompare"
-  | "fractionIdentify";
+  | "fractionIdentify"
+  | "decimalAdd"
+  | "decimalSubtract";
 export type Problem = {
   id: number;
   left: number;
@@ -25,6 +27,8 @@ const symbols: Record<Operation, string> = {
   fractionSubtract: "−",
   fractionCompare: "?",
   fractionIdentify: "=",
+  decimalAdd: "+",
+  decimalSubtract: "−",
 };
 function integer(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -75,9 +79,11 @@ export function generateProblems(
         answer = a;
         a = b * answer;
         break;
+      case "decimalAdd":
       case "fractionAdd":
         answer = a + b;
         break;
+      case "decimalSubtract":
       case "fractionSubtract":
         [a, b] = [Math.max(a, b), Math.min(a, b)];
         answer = a - b;
@@ -104,7 +110,9 @@ export function generateProblems(
           : operation === "fractionCompare"
             ? `${a}/${denominator} _____ ${b}/${denominator}`
             : `${a}/${denominator} ${symbols[operation]} ${b}/${denominator} = _____`
-        : `${a} ${symbols[operation]} ${b} = _____`,
+        : operation.startsWith("decimal")
+          ? `${decimal(a)} ${symbols[operation]} ${decimal(b)} = _____`
+          : `${a} ${symbols[operation]} ${b} = _____`,
     });
   }
   return output;
@@ -118,9 +126,13 @@ export function checkProblems(problems: Problem[]): boolean {
         p.answer === p.left
       : p.operation === "fractionCompare"
         ? Math.sign(p.left - p.right) === p.answer
-        : p.operation === "add" || p.operation === "fractionAdd"
+        : p.operation === "add" ||
+            p.operation === "fractionAdd" ||
+            p.operation === "decimalAdd"
           ? p.left + p.right === p.answer
-          : p.operation === "subtract" || p.operation === "fractionSubtract"
+          : p.operation === "subtract" ||
+              p.operation === "fractionSubtract" ||
+              p.operation === "decimalSubtract"
             ? p.left - p.right === p.answer && p.answer >= 0
             : p.operation === "multiply"
               ? p.left * p.right === p.answer
@@ -129,6 +141,19 @@ export function checkProblems(problems: Problem[]): boolean {
                 Number.isInteger(p.answer),
   );
 }
+function decimal(hundredths: number): string {
+  return (hundredths / 100).toFixed(2);
+}
+
+function simplifiedFraction(numerator: number, denominator: number): string {
+  let a = numerator;
+  let b = denominator;
+  while (b) [a, b] = [b, a % b];
+  return denominator === a
+    ? String(numerator / a)
+    : `${numerator / a}/${denominator / a}`;
+}
+
 export function worksheetLines(
   problems: Problem[],
   answers: boolean,
@@ -142,8 +167,12 @@ export function worksheetLines(
             ? ">"
             : "="
         : p.denominator
-          ? `${p.answer}/${p.denominator}`
-          : String(p.answer);
+          ? p.operation === "fractionIdentify"
+            ? `${p.answer}/${p.denominator}`
+            : simplifiedFraction(p.answer, p.denominator)
+          : p.operation.startsWith("decimal")
+            ? decimal(p.answer)
+            : String(p.answer);
     return `${p.id}.  ${answers ? p.display.replace("_____", answer) : p.display}`;
   });
 }

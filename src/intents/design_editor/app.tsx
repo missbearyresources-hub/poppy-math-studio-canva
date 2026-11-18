@@ -1,3 +1,5 @@
+import { requestFontSelection } from "@canva/asset";
+import type { TextElement } from "@canva/design";
 import { useFeatureSupport } from "@canva/app-hooks";
 import {
   Button,
@@ -37,8 +39,34 @@ const operations: Operation[] = [
   "fractionSubtract",
   "fractionCompare",
   "fractionIdentify",
+  "decimalAdd",
+  "decimalSubtract",
 ];
 const messages = defineMessages({
+  decimalAdd: {
+    description: "Decimal operation",
+    defaultMessage: "Add decimals (hundredths)",
+  },
+  decimalSubtract: {
+    description: "Decimal operation",
+    defaultMessage: "Subtract decimals (hundredths)",
+  },
+  font: {
+    description: "Opens native Canva font picker",
+    defaultMessage: "Choose Canva font",
+  },
+  fontError: {
+    description: "Font selection error",
+    defaultMessage: "Could not open the Canva font picker.",
+  },
+  simplify: {
+    description: "Student directions for fraction arithmetic",
+    defaultMessage: "Solve and write each answer in simplest form.",
+  },
+  compare: {
+    description: "Student directions for comparing fractions",
+    defaultMessage: "Write <, >, or = in each blank.",
+  },
   fractionAdd: {
     description: "Math operation",
     defaultMessage: "Add like-denominator fractions",
@@ -217,6 +245,18 @@ export const App = () => {
   const addElement = [addElementAtPoint, addElementAtCursor].find((fn) =>
     supports(fn),
   );
+  const [font, setFont] = useState<{
+    ref: TextElement["fontRef"];
+    name: string;
+  }>();
+  const chooseFont = async () => {
+    try {
+      const result = await requestFontSelection({ selectedFontRef: font?.ref });
+      if (result.type === "completed") setFont(result.font);
+    } catch {
+      setMessage(formatMessage(messages.fontError));
+    }
+  };
   const [operation, setOperation] = useState<Operation>("add");
   const [seed, setSeed] = useState("");
   const [customTitle, setCustomTitle] = useState("");
@@ -262,6 +302,7 @@ export const App = () => {
     try {
       await addElement({
         type: "text",
+        fontRef: font?.ref,
         children: [
           answers
             ? formatMessage(messages.answerTitle) +
@@ -305,7 +346,11 @@ export const App = () => {
               formatMessage(
                 problems[0]?.operation === "fractionIdentify"
                   ? messages.visualDirections
-                  : messages.directions,
+                  : problems[0]?.operation === "fractionCompare"
+                    ? messages.compare
+                    : problems[0]?.denominator
+                      ? messages.simplify
+                      : messages.directions,
               ),
           ];
       await addPage({
@@ -316,6 +361,7 @@ export const App = () => {
           instructions,
           worksheetLines(problems, answers),
           columns,
+          font?.ref,
         ),
       });
       setMessage(formatMessage(messages.pageAdded));
@@ -407,6 +453,9 @@ export const App = () => {
             <TextInput {...props} onChange={setDirections} maxLength={70} />
           )}
         />
+        <Button variant="secondary" onClick={chooseFont} stretch>
+          {font?.name || formatMessage(messages.font)}
+        </Button>
         <Button variant="secondary" onClick={generate} stretch>
           {formatMessage(messages.generate)}
         </Button>
@@ -418,7 +467,8 @@ export const App = () => {
         <div
           style={{
             whiteSpace: "pre-wrap",
-            fontFamily: "monospace",
+            fontFamily: "sans-serif",
+            color: "#000000",
             background: "#fff",
             border: "1px solid #d9d9e0",
             borderRadius: 8,
@@ -437,21 +487,60 @@ export const App = () => {
             "",
             ...(showAnswers ? [] : [formatMessage(messages.name)]),
             "",
-            ...lines,
           ].join("\n")}
+          {lines.map((line, i) => (
+            <div key={problems[i]?.id}>
+              {Array.from(line, (character, index) =>
+                character === "■" || character === "□" ? (
+                  <span
+                    key={index}
+                    style={{
+                      display: "inline-block",
+                      width: "0.85em",
+                      height: "0.85em",
+                      verticalAlign: "middle",
+                      border: "1px solid #000",
+                      boxSizing: "border-box",
+                      background: character === "■" ? "#000" : "#fff",
+                    }}
+                  />
+                ) : (
+                  character
+                ),
+              )}
+            </div>
+          ))}
         </div>
         <Button
           variant="primary"
-          onClick={() => addToDesign(false)}
-          disabled={!addElement || busy}
+          onClick={() =>
+            problems[0]?.operation === "fractionIdentify"
+              ? addFormattedPage(false)
+              : addToDesign(false)
+          }
+          disabled={
+            busy ||
+            (problems[0]?.operation === "fractionIdentify"
+              ? !canAddPage
+              : !addElement)
+          }
           stretch
         >
           {formatMessage(busy ? messages.adding : messages.insert)}
         </Button>
         <Button
           variant="secondary"
-          onClick={() => addToDesign(true)}
-          disabled={!addElement || busy}
+          onClick={() =>
+            problems[0]?.operation === "fractionIdentify"
+              ? addFormattedPage(true)
+              : addToDesign(true)
+          }
+          disabled={
+            busy ||
+            (problems[0]?.operation === "fractionIdentify"
+              ? !canAddPage
+              : !addElement)
+          }
           stretch
         >
           {formatMessage(messages.insertKey)}

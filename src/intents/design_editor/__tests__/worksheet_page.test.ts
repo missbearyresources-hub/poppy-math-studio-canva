@@ -15,17 +15,19 @@ describe("formatted Canva worksheet", () => {
       2,
     );
     const questions = elements.slice(3);
-    expect(questions.map(({ children }) => children)).toEqual(
-      lines.map((line) => [line]),
-    );
+    expect(
+      questions.map((element) =>
+        element.type === "text" ? element.children : undefined,
+      ),
+    ).toEqual(lines.map((line) => [line]));
     expect(new Set(questions.map(({ left }) => left)).size).toBe(2);
     for (const element of elements) {
-      expect(element.left + (element.width ?? 0)).toBeLessThan(
+      expect(element.left + Number(element.width ?? 0)).toBeLessThan(
         dimensions.width,
       );
-      expect(element.top + (element.fontSize ?? 0)).toBeLessThan(
-        dimensions.height,
-      );
+      expect(
+        element.top + (element.type === "text" ? (element.fontSize ?? 0) : 0),
+      ).toBeLessThan(dimensions.height);
     }
   });
 });
